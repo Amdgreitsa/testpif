@@ -16,6 +16,8 @@ const dbFile = path.join(dataDir, 'db.json');
 const PORT = Number(process.env.PORT || 3000);
 const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
 const APIFY_ACTOR = process.env.APIFY_ACTOR || 'apify/instagram-scraper';
+const TELEGRAM_BOT_USERNAME = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '');
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SESSION_TTL = 1000 * 60 * 60 * 24 * 14;
 const isProduction = process.env.NODE_ENV === 'production';
 const loginAttempts = new Map();
@@ -25,11 +27,23 @@ fs.mkdirSync(dataDir, { recursive: true });
 const id = () => crypto.randomUUID();
 const hash = password => { const salt = crypto.randomBytes(16).toString('hex'); return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`; };
 const verify = (password, stored) => { const [salt, key] = stored.split(':'); return crypto.timingSafeEqual(Buffer.from(key, 'hex'), crypto.scryptSync(password, salt, 64)); };
+const configuredAdmin = () => ({ email: process.env.ADMIN_EMAIL || 'admin@pifpaf.local', password: process.env.ADMIN_PASSWORD || 'change-me-now' });
+const adminFingerprint = ({ email, password }) => crypto.createHash('sha256').update(`${email}\0${password}`).digest('hex');
 function seed() {
-  const user = { id: id(), name: 'Алина Романова', email: process.env.ADMIN_EMAIL || 'admin@pifpaf.local', passwordHash: hash(process.env.ADMIN_PASSWORD || 'change-me-now'), role: 'admin', createdAt: new Date().toISOString() };
-  return { users: [user], accounts: [{ id: id(), userId: user.id, handle: '@alina.creates', name: 'Алина Романова' }], reels: [], snapshots: [], sessions: [] };
+  const admin = configuredAdmin(); const user = { id: id(), name: 'Алина Романова', email: admin.email, passwordHash: hash(admin.password), role: 'admin', createdAt: new Date().toISOString() };
+  return { users: [user], accounts: [{ id: id(), userId: user.id, handle: '@alina.creates', name: 'Алина Романова' }], reels: [], snapshots: [], sessions: [], adminCredentialFingerprint: adminFingerprint(admin) };
 }
-function readDb() { if (!fs.existsSync(dbFile)) { const db = seed(); fs.writeFileSync(dbFile, JSON.stringify(db, null, 2)); return db; } return JSON.parse(fs.readFileSync(dbFile, 'utf8')); }
+function syncConfiguredAdmin(db) {
+  const admin = configuredAdmin(); const fingerprint = adminFingerprint(admin);
+  if (db.adminCredentialFingerprint === fingerprint) return false;
+  const user = db.users.find(item => item.role === 'admin');
+  if (!user) return false;
+  user.email = admin.email;
+  user.passwordHash = hash(admin.password);
+  db.adminCredentialFingerprint = fingerprint;
+  return true;
+}
+function readDb() { if (!fs.existsSync(dbFile)) { const db = seed(); fs.writeFileSync(dbFile, JSON.stringify(db, null, 2)); return db; } const db = JSON.parse(fs.readFileSync(dbFile, 'utf8')); if (syncConfiguredAdmin(db)) saveDb(db); return db; }
 function saveDb(db) { const temporary = `${dbFile}.${process.pid}.tmp`; fs.writeFileSync(temporary, JSON.stringify(db, null, 2), { mode: 0o600 }); fs.renameSync(temporary, dbFile); }
 function send(res, status, value, headers = {}) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', ...headers }); res.end(JSON.stringify(value)); }
 function cookies(req) { return Object.fromEntries((req.headers.cookie || '').split(';').filter(Boolean).map(v => v.trim().split('=').map(decodeURIComponent))); }
@@ -37,6 +51,28 @@ function body(req) { return new Promise((resolve, reject) => { let raw = ''; req
 function currentUser(req, db) { const token = cookies(req).pif_session; const session = db.sessions.find(s => s.token === token && new Date(s.expiresAt) > new Date()); return session && db.users.find(user => user.id === session.userId); }
 function auth(req, res, db) { const user = currentUser(req, db); if (!user) { send(res, 401, { error: 'Требуется вход' }); return null; } return user; }
 function publicUser(user) { return { id: user.id, name: user.name, email: user.email, role: user.role }; }
+function createSession(db, user) { const token = crypto.randomBytes(32).toString('hex'); db.sessions = db.sessions.filter(s => new Date(s.expiresAt) > new Date()); db.sessions.push({ token, userId: user.id, expiresAt: new Date(Date.now() + SESSION_TTL).toISOString() }); saveDb(db); return token; }
+const telegramEnabled = () => Boolean(TELEGRAM_BOT_USERNAME) && Boolean(TELEGRAM_BOT_TOKEN);
+function verifyTelegramAuth(payload) {
+  const { hash: signature, ...fields } = payload || {};
+  if (!signature || !telegramEnabled()) return false;
+  const data = Object.entries(fields).filter(([key, value]) => value !== undefined && value !== null && key !== 'hash').sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${key}=${value}`).join('\n');
+  const secret = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
+  const expected = crypto.createHmac('sha256', secret).update(data).digest('hex');
+  return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) && Number.isSafeInteger(Number(fields.auth_date)) && Date.now() - Number(fields.auth_date) * 1000 < 24 * 60 * 60 * 1000;
+}
+function loginWithTelegram(payload, db) {
+  if (!verifyTelegramAuth(payload)) throw new Error('Telegram не подтвердил авторизацию');
+  const telegramId = String(payload.id);
+  let user = db.users.find(item => item.telegramId === telegramId);
+  if (!user) {
+    const name = [payload.first_name, payload.last_name].filter(Boolean).join(' ') || `Telegram ${telegramId}`;
+    const handle = payload.username ? `@${payload.username}` : `@telegram_${telegramId}`;
+    user = { id: id(), name, email: `telegram-${telegramId}@pifpaf.local`, passwordHash: hash(crypto.randomBytes(32).toString('hex')), role: 'creator', telegramId, createdAt: new Date().toISOString() };
+    db.users.push(user); db.accounts.push({ id: id(), userId: user.id, handle, name });
+  }
+  return { user, token: createSession(db, user) };
+}
 const compact = number => new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(number || 0);
 function reelDto(reel) { return { ...reel, formattedViews: compact(reel.views), formattedLikes: compact(reel.likes) }; }
 function analytics(db, user) { const accounts = db.accounts.filter(a => user.role === 'admin' || a.userId === user.id); const accountIds = new Set(accounts.map(a => a.id)); const reels = db.reels.filter(r => accountIds.has(r.accountId)); const views = reels.reduce((sum, r) => sum + (r.views || 0), 0); const likes = reels.reduce((sum, r) => sum + (r.likes || 0), 0); const comments = reels.reduce((sum, r) => sum + (r.comments || 0), 0); const engagement = views ? ((likes + comments) / views) * 100 : 0; return { views, likes, comments, engagement: Number(engagement.toFixed(1)), reels: reels.length, updatedAt: reels.map(r => r.syncedAt).filter(Boolean).sort().at(-1) || null }; }
@@ -61,7 +97,9 @@ http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`); const db = readDb(); const user = currentUser(req, db);
     if (url.pathname === '/api/health') return send(res, 200, { ok: true, apifyConfigured: Boolean(APIFY_TOKEN) });
     if (url.pathname === '/api/auth/me' && req.method === 'GET') return user ? send(res, 200, { user: publicUser(user) }) : send(res, 401, { error: 'Требуется вход' });
-    if (url.pathname === '/api/auth/login' && req.method === 'POST') { const remote = req.socket.remoteAddress || 'unknown'; const attempts = (loginAttempts.get(remote) || []).filter(at => Date.now() - at < 15 * 60 * 1000); if (attempts.length >= 10) return send(res, 429, { error: 'Слишком много попыток входа. Повторите через 15 минут.' }); const { email, password } = await body(req); const found = db.users.find(item => item.email.toLowerCase() === String(email).toLowerCase()); if (!found || !verify(password || '', found.passwordHash)) { loginAttempts.set(remote, [...attempts, Date.now()]); return send(res, 401, { error: 'Неверный email или пароль' }); } loginAttempts.delete(remote); const token = crypto.randomBytes(32).toString('hex'); db.sessions = db.sessions.filter(s => new Date(s.expiresAt) > new Date()); db.sessions.push({ token, userId: found.id, expiresAt: new Date(Date.now() + SESSION_TTL).toISOString() }); saveDb(db); const secure = isProduction ? '; Secure' : ''; return send(res, 200, { user: publicUser(found) }, { 'Set-Cookie': `pif_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL / 1000}${secure}` }); }
+    if (url.pathname === '/api/auth/login' && req.method === 'POST') { const remote = req.socket.remoteAddress || 'unknown'; const attempts = (loginAttempts.get(remote) || []).filter(at => Date.now() - at < 15 * 60 * 1000); if (attempts.length >= 10) return send(res, 429, { error: 'Слишком много попыток входа. Повторите через 15 минут.' }); const { email, password } = await body(req); const found = db.users.find(item => item.email.toLowerCase() === String(email).toLowerCase()); if (!found || !verify(password || '', found.passwordHash)) { loginAttempts.set(remote, [...attempts, Date.now()]); return send(res, 401, { error: 'Неверный email или пароль' }); } loginAttempts.delete(remote); const token = createSession(db, found); const secure = isProduction ? '; Secure' : ''; return send(res, 200, { user: publicUser(found) }, { 'Set-Cookie': `pif_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL / 1000}${secure}` }); }
+    if (url.pathname === '/api/auth/telegram/config' && req.method === 'GET') return telegramEnabled() ? send(res, 200, { botUsername: TELEGRAM_BOT_USERNAME }) : send(res, 503, { error: 'Вход через Telegram не настроен' });
+    if (url.pathname === '/api/auth/telegram/login' && req.method === 'POST') { try { const result = loginWithTelegram(await body(req), db); const secure = isProduction ? '; Secure' : ''; return send(res, 200, { user: publicUser(result.user) }, { 'Set-Cookie': `pif_session=${result.token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL / 1000}${secure}` }); } catch (error) { return send(res, 401, { error: error.message }); } }
     if (url.pathname === '/api/auth/logout' && req.method === 'POST') { db.sessions = db.sessions.filter(s => s.token !== cookies(req).pif_session); saveDb(db); return send(res, 204, {}, { 'Set-Cookie': `pif_session=; HttpOnly; Path=/; Max-Age=0${isProduction ? '; Secure' : ''}` }); }
     if (url.pathname === '/api/dashboard' && req.method === 'GET') { const signed = auth(req, res, db); if (!signed) return; const data = analytics(db, signed); const ids = new Set(db.accounts.filter(a => signed.role === 'admin' || a.userId === signed.id).map(a => a.id)); return send(res, 200, { analytics: data, reels: db.reels.filter(r => ids.has(r.accountId)).sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)).map(reelDto), accounts: db.accounts.filter(a => ids.has(a.id)) }); }
     if (url.pathname === '/api/reels' && req.method === 'POST') { const signed = auth(req, res, db); if (!signed) return; const { sourceUrl, accountId } = await body(req); if (!/^https:\/\/(www\.)?instagram\.com\/reel\//i.test(sourceUrl || '')) return send(res, 422, { error: 'Укажите корректную ссылку Instagram Reel' }); const account = db.accounts.find(a => a.id === accountId) || db.accounts.find(a => a.userId === signed.id) || db.accounts[0]; const reel = { id: id(), accountId: account.id, sourceUrl, title: 'Рилс добавлен — ожидает синхронизации', publishedAt: new Date().toISOString(), views: 0, likes: 0, comments: 0, duration: 0, coverUrl: null, syncStatus: 'pending', syncedAt: null, createdAt: new Date().toISOString() }; db.reels.push(reel); saveDb(db); try { await syncReel(db, reel); } catch (error) { reel.syncStatus = 'failed'; reel.syncError = error.message; saveDb(db); } return send(res, 201, { reel: reelDto(reel) }); }
