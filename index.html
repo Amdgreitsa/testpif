@@ -19,7 +19,7 @@
       <p class="muted">Войдите, чтобы посмотреть результаты ваших Reels.</p>
       <label>Email<input id="email" type="email" autocomplete="email" required placeholder="admin@pifpaf.local" /></label>
       <label>Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="••••••••" /></label>
-      <p class="form-error" id="loginError"></p><button class="add-btn full">Войти →</button>
+      <p class="form-error" id="loginError"></p><button class="add-btn full" type="submit">Войти →</button>
       <div class="telegram-login" id="telegramLogin" aria-label="Войти через Telegram"></div>
       <small>Войдите по email и паролю или зарегистрируйтесь через Telegram.</small>
     </form>
@@ -35,7 +35,7 @@
     <main>
       <header class="topbar">
         <div class="mobile-brand">pif paf</div>
-        <div class="top-actions"><button class="icon-btn" id="openNotifications" aria-label="Открыть уведомления">♧<i hidden></i></button><button class="add-btn" id="openAdd">+ <span>Добавить рилс</span></button></div>
+        <div class="top-actions"><button class="icon-btn" id="openNotifications" type="button" aria-label="Открыть уведомления">♧<i hidden></i></button><button class="add-btn" id="openAdd" type="button">+ <span>Добавить рилс</span></button></div>
       </header>
       <section id="overview" class="content">
         <div class="welcome-row"><div><p class="eyebrow" id="greeting">ДОБРОЕ УТРО ✦</p><h1>Ваше творчество<br><em>в цифрах.</em></h1></div><p class="freshness"><span></span> <span id="freshnessText">Загружаем данные…</span></p></div>
@@ -45,19 +45,19 @@
           <article class="stat-card mint"><p>ЛАЙКИ</p><strong id="likesTotal">—</strong><small>по всем рилсам</small><div class="sparkline green-line">▃▅▂▆▄▃▇▅</div></article>
           <article class="stat-card yellow"><p>РИЛСОВ В БАЗЕ</p><strong id="reelsTotal">—</strong><small>синхронизация сервером</small><div class="rating-dots">● ● ● ● ◐</div></article>
         </section>
-        <section class="section-heading"><div><p class="eyebrow">ВАШ КОНТЕНТ</p><h2>Последние рилсы</h2></div><div class="switcher" aria-label="Вид списка"><button class="selected" data-view="grid" aria-label="Плитка">▦</button><button data-view="list" aria-label="Список">☷</button></div></section>
+        <section class="section-heading"><div><p class="eyebrow">ВАШ КОНТЕНТ</p><h2>Последние рилсы</h2></div><div class="switcher" aria-label="Вид списка"><button class="selected" type="button" data-view="grid" aria-label="Плитка">▦</button><button type="button" data-view="list" aria-label="Список">☷</button></div></section>
         <section class="reels-grid" id="reels"></section>
-        <button class="show-more" id="showMore" hidden>Показать все рилсы <span>→</span></button>
-        <section id="analytics" class="analytics-panel"><div><p class="eyebrow">АНАЛИТИКА</p><h2>Ритм просмотров</h2><p class="muted" id="rhythmSummary">Собираем достаточно данных, чтобы показать ритм просмотров.</p></div><div class="chart" aria-label="Распределение просмотров по дням публикации"><div class="bars" id="rhythmBars"></div><div class="chart-labels"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div></div></section>
+        <button class="show-more" id="showMore" type="button" hidden>Показать все рилсы <span>→</span></button>
+        <section id="analytics" class="analytics-panel"><div><p class="eyebrow">АНАЛИТИКА</p><h2>Ритм просмотров</h2><p class="muted" id="rhythmSummary">Собираем достаточно данных, чтобы показать ритм просмотров.</p><div class="analytics-legend"><span><i class="legend-dot"></i>Просмотры по дням публикации</span><strong id="rhythmPeak">—</strong></div></div><div class="chart" aria-label="Распределение фактических просмотров по дням публикации"><div class="bars" id="rhythmBars"></div><div class="chart-labels"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div></div></section>
       </section>
     </main>
   </div>
-  <button class="mobile-connect" id="openSettingsMobile" aria-label="Подключить Instagram">⌁ <span>Instagram</span></button>
+  <button class="mobile-connect" id="openSettingsMobile" type="button" aria-label="Подключить Instagram">⌁ <span>Instagram</span></button>
   <dialog id="addDialog"><form id="reelForm"><button class="close" type="button" data-close>×</button><p class="eyebrow">НОВЫЙ РИЛС</p><h2>Добавьте ссылку из Instagram</h2><p class="muted">Мы подтянем обложку, дату и показатели через Apify.</p><label>Ссылка на рилс<input id="reelUrl" type="url" placeholder="https://instagram.com/reel/..." required /></label><button class="add-btn full" value="default">Подтянуть данные →</button></form></dialog>
   <dialog id="settingsDialog"><form id="settingsForm"><button class="close" type="button" data-close>×</button><p class="eyebrow">ИНТЕГРАЦИЯ</p><h2>Подключить профиль</h2><p class="muted">Укажите Instagram-профиль, и кабинет подтянет последние рилсы с обложками, датами и метриками.</p><label>Instagram профиль<input id="accountHandle" type="text" placeholder="@brand или https://instagram.com/brand" /></label><label>Сколько последних рилсов подтянуть<input id="reelsLimit" type="number" min="1" max="50" value="50" /></label><button class="add-btn full" id="syncAccount">Подключить профиль и подтянуть рилсы →</button><p class="dialog-note">Можно запросить до 50 публикаций за запуск. Apify вернёт только доступные публикации; после импорта кабинет покажет точное количество.</p></form></dialog>
   <dialog id="notificationsDialog" class="notifications-dialog"><section><button class="close" type="button" data-close>×</button><p class="eyebrow">ЦЕНТР УВЕДОМЛЕНИЙ</p><h2>Будьте в курсе</h2><div id="notificationsList" class="notifications-list"></div></section></dialog>
   <dialog id="messageDialog" class="message-dialog"><section><div class="message-icon" id="messageIcon">✓</div><p class="eyebrow" id="messageKicker">ГОТОВО</p><h2 id="messageTitle">Готово</h2><p class="muted" id="messageText"></p><button class="add-btn full" id="messageClose" type="button">Понятно</button></section></dialog>
-  <section class="cookie-banner" id="cookieBanner" hidden aria-label="Использование cookie"><div><p class="eyebrow">COOKIE</p><strong>Мы используем только необходимые cookie</strong><p>Они нужны, чтобы сохранить безопасный вход в кабинет. Рекламных и аналитических cookie здесь нет.</p></div><button class="add-btn" id="acceptCookies">Понятно</button></section>
+  <section class="cookie-banner" id="cookieBanner" hidden aria-label="Использование cookie"><div><p class="eyebrow">COOKIE</p><strong>Мы используем только необходимые cookie</strong><p>Они нужны, чтобы сохранить безопасный вход в кабинет. Рекламных и аналитических cookie здесь нет.</p></div><button class="add-btn" id="acceptCookies" type="button">Понятно</button></section>
   <template id="reelTemplate"><article class="reel-card"><div class="cover"><img alt="Обложка рилса" /><span class="reel-type">REEL</span><span class="duration"></span><button class="more" aria-label="Меню рилса">•••</button></div><div class="reel-info"><div><h3></h3><p class="date"></p></div><button class="save" aria-label="Сохранить">♡</button></div><div class="metrics"><span>▶ <b class="view-count"></b></span><span>♡ <b class="like-count"></b></span><span>◌ <b class="comment-count"></b></span></div></article></template>
   <script src="app.js"></script>
 </body>

@@ -77,7 +77,27 @@ function loginWithTelegram(payload, db) {
 }
 const compact = number => new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(number || 0);
 function reelDto(reel) { return { ...reel, formattedViews: compact(reel.views), formattedLikes: compact(reel.likes) }; }
-function analytics(db, user) { const accounts = db.accounts.filter(a => user.role === 'admin' || a.userId === user.id); const accountIds = new Set(accounts.map(a => a.id)); const reels = db.reels.filter(r => accountIds.has(r.accountId)); const views = reels.reduce((sum, r) => sum + (r.views || 0), 0); const likes = reels.reduce((sum, r) => sum + (r.likes || 0), 0); const comments = reels.reduce((sum, r) => sum + (r.comments || 0), 0); const engagement = views ? ((likes + comments) / views) * 100 : 0; const dayViews = Array(7).fill(0); reels.forEach(reel => { const date = new Date(reel.publishedAt); if (!Number.isNaN(date.getTime())) dayViews[(date.getDay() + 6) % 7] += reel.views || 0; }); const max = Math.max(...dayViews, 0); const bestDayIndex = max ? dayViews.indexOf(max) : null; return { views, likes, comments, engagement: Number(engagement.toFixed(1)), reels: reels.length, updatedAt: reels.map(r => r.syncedAt).filter(Boolean).sort().at(-1) || null, rhythm: { dayViews, bestDay: bestDayIndex === null ? null : ['понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу', 'воскресенье'][bestDayIndex] } }; }
+function analytics(db, user) {
+  const accounts = db.accounts.filter(a => user.role === 'admin' || a.userId === user.id);
+  const accountIds = new Set(accounts.map(a => a.id));
+  const reels = db.reels.filter(r => accountIds.has(r.accountId));
+  const views = reels.reduce((sum, r) => sum + (r.views || 0), 0);
+  const likes = reels.reduce((sum, r) => sum + (r.likes || 0), 0);
+  const comments = reels.reduce((sum, r) => sum + (r.comments || 0), 0);
+  const engagement = views ? ((likes + comments) / views) * 100 : 0;
+  const dayViews = Array(7).fill(0);
+  reels.forEach(reel => {
+    const date = new Date(reel.publishedAt);
+    if (!Number.isNaN(date.getTime())) dayViews[(date.getDay() + 6) % 7] += reel.views || 0;
+  });
+  const max = Math.max(...dayViews, 0);
+  const bestDayIndex = max ? dayViews.indexOf(max) : null;
+  return {
+    views, likes, comments, engagement: Number(engagement.toFixed(1)), reels: reels.length,
+    updatedAt: reels.map(r => r.syncedAt).filter(Boolean).sort().at(-1) || null,
+    rhythm: { dayViews, peakViews: max, bestDay: bestDayIndex === null ? null : ['понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу', 'воскресенье'][bestDayIndex] }
+  };
+}
 function apifyEndpoint() { return `https://api.apify.com/v2/acts/${encodeURIComponent(APIFY_ACTOR)}/run-sync-get-dataset-items?token=${encodeURIComponent(APIFY_TOKEN)}`; }
 async function runApify(input) {
   if (!APIFY_TOKEN) throw new Error('APIFY_TOKEN не настроен на сервере');
