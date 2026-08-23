@@ -217,7 +217,7 @@ server {
   client_max_body_size 1m;
   ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-  location / { proxy_pass http://127.0.0.1:$PORT; proxy_http_version 1.1; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; }
+  location / { proxy_pass http://127.0.0.1:$PORT; proxy_http_version 1.1; proxy_connect_timeout 15s; proxy_read_timeout 10m; proxy_send_timeout 10m; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; }
 }
 EOF_TLS
 )
@@ -227,7 +227,7 @@ server {
   listen 80;
   server_name $DOMAIN;
   client_max_body_size 1m;
-  location / { proxy_pass http://127.0.0.1:$PORT; proxy_http_version 1.1; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; }
+  location / { proxy_pass http://127.0.0.1:$PORT; proxy_http_version 1.1; proxy_connect_timeout 15s; proxy_read_timeout 10m; proxy_send_timeout 10m; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; }
 }
 $TLS_SERVER
 EOF_NGINX

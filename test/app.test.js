@@ -64,3 +64,15 @@ test('dashboard account handle field is present for dashboard rendering and prof
   assert.match(app, /\$\('#accountHandle'\)\.value/);
   assert.match(html, /<input id="accountHandle"[^>]*required/);
 });
+
+test('profile import keeps long-running Apify requests alive and reports non-JSON proxy failures clearly', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const install = fs.readFileSync('install.sh', 'utf8');
+
+  assert.match(app, /const payload = await response\.text\(\)/);
+  assert.match(app, /Сервер вернул неожиданный ответ вместо JSON/);
+  assert.match(app, /Загружаем до \$\{limit\} рилсов/);
+  assert.match(app, /Рилсов: \$\{data\.total\}/);
+  assert.match(install, /proxy_read_timeout 10m/);
+  assert.match(install, /proxy_send_timeout 10m/);
+});
