@@ -122,11 +122,12 @@ fi
 
 # The service runs as www-data. Do not run it directly from /root: www-data cannot
 # traverse that directory even when files inside it are chowned correctly.
-echo "Устанавливаем/обновляем Node.js, Nginx и Certbot…"
+echo "Устанавливаем/обновляем Node.js, npm, Nginx и Certbot…"
 apt-get update
-apt-get install -y curl nginx certbot python3-certbot-nginx nodejs
+apt-get install -y curl nginx certbot python3-certbot-nginx nodejs npm
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 [[ "$NODE_MAJOR" -ge 18 ]] || { echo "Требуется Node.js 18 или новее, найден: $(node --version)"; exit 1; }
+command -v npm >/dev/null || { echo "npm не установлен. Установите пакет npm и повторите запуск install.sh."; exit 1; }
 
 umask 077
 install -d -m 755 "$APP_DIR"
