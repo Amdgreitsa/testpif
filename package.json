@@ -6,5 +6,7 @@
     "start": "node server.js",
     "test": "node --test"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
