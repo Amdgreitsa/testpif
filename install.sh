@@ -83,6 +83,9 @@ EXISTING_ADMIN_PASSWORD="$(get_env ADMIN_PASSWORD || true)"
 EXISTING_APIFY_TOKEN="$(get_env APIFY_TOKEN || true)"
 EXISTING_APIFY_ACTOR="$(get_env APIFY_ACTOR || true)"
 EXISTING_SYNC_INTERVAL="$(get_env SYNC_INTERVAL_MS || true)"
+EXISTING_TELEGRAM_API_ID="$(get_env TELEGRAM_API_ID || true)"
+EXISTING_TELEGRAM_API_HASH="$(get_env TELEGRAM_API_HASH || true)"
+EXISTING_TELEGRAM_ALLOWED_USER_IDS="$(get_env TELEGRAM_ALLOWED_USER_IDS || true)"
 EXISTING_DOMAIN="$(read_existing_domain || true)"
 
 if [[ "$UPDATE_ONLY" == "1" ]]; then
@@ -94,6 +97,9 @@ if [[ "$UPDATE_ONLY" == "1" ]]; then
   APIFY_TOKEN="$EXISTING_APIFY_TOKEN"
   APIFY_ACTOR="${EXISTING_APIFY_ACTOR:-apify/instagram-scraper}"
   SYNC_INTERVAL_MS="${EXISTING_SYNC_INTERVAL:-21600000}"
+  TELEGRAM_API_ID="$EXISTING_TELEGRAM_API_ID"
+  TELEGRAM_API_HASH="$EXISTING_TELEGRAM_API_HASH"
+  TELEGRAM_ALLOWED_USER_IDS="$EXISTING_TELEGRAM_ALLOWED_USER_IDS"
   [[ -n "$DOMAIN" ]] || { echo "Не нашёл домен в /etc/nginx/sites-available/pifpaf-creators."; exit 1; }
 else
   while true; do
@@ -108,7 +114,13 @@ else
   APIFY_TOKEN="$(prompt_secret "Apify API token (можно оставить пустым и добавить позже)" "$EXISTING_APIFY_TOKEN" 0)"
   APIFY_ACTOR="$(prompt_value "Apify actor" "${EXISTING_APIFY_ACTOR:-apify/instagram-scraper}" 0)"
   SYNC_INTERVAL_MS="$(prompt_value "Интервал автосинхронизации, мс" "${EXISTING_SYNC_INTERVAL:-21600000}" 0)"
+  TELEGRAM_API_ID="$(prompt_value "Telegram API ID для QR-входа (пусто — выключить)" "$EXISTING_TELEGRAM_API_ID" 0)"
+  TELEGRAM_API_HASH="$(prompt_secret "Telegram API hash для QR-входа" "$EXISTING_TELEGRAM_API_HASH" 0)"
+  TELEGRAM_ALLOWED_USER_IDS="$(prompt_value "Разрешённые Telegram user ID через запятую" "$EXISTING_TELEGRAM_ALLOWED_USER_IDS" 0)"
   [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { echo "Пароль администратора должен содержать не менее 12 символов."; exit 1; }
+  if [[ -n "$TELEGRAM_API_ID$TELEGRAM_API_HASH$TELEGRAM_ALLOWED_USER_IDS" ]]; then
+    [[ "$TELEGRAM_API_ID" =~ ^[0-9]+$ && -n "$TELEGRAM_API_HASH" && -n "$TELEGRAM_ALLOWED_USER_IDS" ]] || { echo "Для QR-входа Telegram укажите API ID, API hash и хотя бы один разрешённый user ID."; exit 1; }
+  fi
 fi
 
 # The service runs as www-data. Do not run it directly from /root: www-data cannot
@@ -134,6 +146,9 @@ ADMIN_PASSWORD=$ADMIN_PASSWORD
 APIFY_TOKEN=$APIFY_TOKEN
 APIFY_ACTOR=${APIFY_ACTOR:-apify/instagram-scraper}
 SYNC_INTERVAL_MS=${SYNC_INTERVAL_MS:-21600000}
+TELEGRAM_API_ID=$TELEGRAM_API_ID
+TELEGRAM_API_HASH=$TELEGRAM_API_HASH
+TELEGRAM_ALLOWED_USER_IDS=$TELEGRAM_ALLOWED_USER_IDS
 EOF_ENV
 mkdir -p "$APP_DIR/data"
 cat >/etc/systemd/system/pifpaf-creators.service <<EOF_SERVICE

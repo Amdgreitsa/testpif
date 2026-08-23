@@ -19,9 +19,11 @@
       <label>Email<input id="email" type="email" autocomplete="email" required placeholder="admin@pifpaf.local" /></label>
       <label>Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="••••••••" /></label>
       <p class="form-error" id="loginError"></p><button class="add-btn full">Войти →</button>
-      <small>Тестовый вход: <code>admin@pifpaf.local</code> / <code>change-me-now</code>.</small>
+      <button class="telegram-login" id="telegramLogin" type="button">Войти через Telegram</button>
+      <small>Используйте email и пароль или подтверждение в Telegram.</small>
     </form>
   </section>
+  <dialog id="telegramDialog"><form method="dialog"><button class="close" type="button" data-close>×</button><p class="eyebrow">TELEGRAM</p><h2>Подтвердите вход</h2><p class="muted">Откройте Telegram на телефоне, выберите «Настройки → Устройства → Подключить устройство» и отсканируйте код.</p><img class="telegram-qr" id="telegramQr" alt="QR-код для входа через Telegram" /><p class="form-error" id="telegramError"></p><p class="dialog-note" id="telegramStatus">Создаём защищённый QR-код…</p></form></dialog>
   <div class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#"><span class="brand-mark">pif<br>paf</span><span>creators</span></a>
