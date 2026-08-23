@@ -7,6 +7,7 @@ command -v apt-get >/dev/null || { echo "Поддерживаются тольк
 APP_DIR="/opt/pifpaf-creators"
 ENV_FILE="$APP_DIR/.env"
 UPDATE_ONLY=0
+APT_LOCK_TIMEOUT=600
 if [[ "${1:-}" == "--update" ]]; then UPDATE_ONLY=1; fi
 
 get_env() {
@@ -74,6 +75,20 @@ wait_for_health() {
   return 1
 }
 
+wait_for_package_manager() {
+  local elapsed=0
+  command -v fuser >/dev/null || { echo "Утилита fuser недоступна; apt будет самостоятельно ждать блокировку dpkg до ${APT_LOCK_TIMEOUT} секунд."; return 0; }
+  while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+    if (( elapsed >= APT_LOCK_TIMEOUT )); then
+      echo "Менеджер пакетов занят более ${APT_LOCK_TIMEOUT} секунд. Дождитесь завершения unattended-upgrades и повторите запуск."
+      return 1
+    fi
+    echo "Ожидаем освобождения dpkg (unattended-upgrades)… ${elapsed}/${APT_LOCK_TIMEOUT} с"
+    sleep 5
+    ((elapsed += 5))
+  done
+}
+
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ -f "$SOURCE_DIR/server.js" && -f "$SOURCE_DIR/index.html" ]] || { echo "Запускайте скрипт из папки проекта PifPaf Creators."; exit 1; }
 
@@ -83,6 +98,8 @@ EXISTING_ADMIN_PASSWORD="$(get_env ADMIN_PASSWORD || true)"
 EXISTING_APIFY_TOKEN="$(get_env APIFY_TOKEN || true)"
 EXISTING_APIFY_ACTOR="$(get_env APIFY_ACTOR || true)"
 EXISTING_SYNC_INTERVAL="$(get_env SYNC_INTERVAL_MS || true)"
+EXISTING_TELEGRAM_BOT_USERNAME="$(get_env TELEGRAM_BOT_USERNAME || true)"
+EXISTING_TELEGRAM_BOT_TOKEN="$(get_env TELEGRAM_BOT_TOKEN || true)"
 EXISTING_DOMAIN="$(read_existing_domain || true)"
 
 if [[ "$UPDATE_ONLY" == "1" ]]; then
@@ -94,6 +111,8 @@ if [[ "$UPDATE_ONLY" == "1" ]]; then
   APIFY_TOKEN="$EXISTING_APIFY_TOKEN"
   APIFY_ACTOR="${EXISTING_APIFY_ACTOR:-apify/instagram-scraper}"
   SYNC_INTERVAL_MS="${EXISTING_SYNC_INTERVAL:-21600000}"
+  TELEGRAM_BOT_USERNAME="$EXISTING_TELEGRAM_BOT_USERNAME"
+  TELEGRAM_BOT_TOKEN="$EXISTING_TELEGRAM_BOT_TOKEN"
   [[ -n "$DOMAIN" ]] || { echo "Не нашёл домен в /etc/nginx/sites-available/pifpaf-creators."; exit 1; }
 else
   while true; do
@@ -108,20 +127,35 @@ else
   APIFY_TOKEN="$(prompt_secret "Apify API token (можно оставить пустым и добавить позже)" "$EXISTING_APIFY_TOKEN" 0)"
   APIFY_ACTOR="$(prompt_value "Apify actor" "${EXISTING_APIFY_ACTOR:-apify/instagram-scraper}" 0)"
   SYNC_INTERVAL_MS="$(prompt_value "Интервал автосинхронизации, мс" "${EXISTING_SYNC_INTERVAL:-21600000}" 0)"
+  TELEGRAM_BOT_USERNAME="$(prompt_value "Username Telegram-бота для OAuth (без @, пусто — выключить)" "$EXISTING_TELEGRAM_BOT_USERNAME" 0)"
+  TELEGRAM_BOT_TOKEN="$(prompt_secret "Token Telegram-бота для OAuth" "$EXISTING_TELEGRAM_BOT_TOKEN" 0)"
   [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { echo "Пароль администратора должен содержать не менее 12 символов."; exit 1; }
+  if [[ -n "$TELEGRAM_BOT_USERNAME$TELEGRAM_BOT_TOKEN" ]]; then
+    [[ "$TELEGRAM_BOT_USERNAME" =~ ^[A-Za-z0-9_]{5,32}$ && -n "$TELEGRAM_BOT_TOKEN" ]] || { echo "Для OAuth Telegram укажите username бота без @ и token бота."; exit 1; }
+  fi
 fi
 
 # The service runs as www-data. Do not run it directly from /root: www-data cannot
 # traverse that directory even when files inside it are chowned correctly.
-echo "Устанавливаем/обновляем Node.js, Nginx и Certbot…"
-apt-get update
-apt-get install -y curl nginx certbot python3-certbot-nginx nodejs
+echo "Устанавливаем/обновляем Node.js, npm, Nginx и Certbot…"
+wait_for_package_manager
+apt-get -o "DPkg::Lock::Timeout=$APT_LOCK_TIMEOUT" update
+apt-get -o "DPkg::Lock::Timeout=$APT_LOCK_TIMEOUT" install -y curl nginx certbot python3-certbot-nginx nodejs npm
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 [[ "$NODE_MAJOR" -ge 18 ]] || { echo "Требуется Node.js 18 или новее, найден: $(node --version)"; exit 1; }
+command -v npm >/dev/null || { echo "npm не установлен. Установите пакет npm и повторите запуск install.sh."; exit 1; }
 
 umask 077
 install -d -m 755 "$APP_DIR"
-cp -a "$SOURCE_DIR"/. "$APP_DIR"/
+# Do not copy a developer's local database into the server. On first install this
+# lets server.js seed the administrator from the values entered above; on updates
+# the existing production data remains untouched.
+tar --exclude='./data' --exclude='./.env' --exclude='./node_modules' -C "$SOURCE_DIR" -cf - . | tar -C "$APP_DIR" -xf -
+[[ -f "$APP_DIR/package-lock.json" ]] || { echo "Не найден package-lock.json после копирования приложения."; exit 1; }
+# Install exactly the dependencies declared by this release. This also removes
+# modules left by an older release, preventing a missing or stale module from
+# stopping systemd after an update.
+npm ci --omit=dev --prefix "$APP_DIR"
 cat >"$APP_DIR/.env" <<EOF_ENV
 PORT=$PORT
 NODE_ENV=production
@@ -131,6 +165,8 @@ ADMIN_PASSWORD=$ADMIN_PASSWORD
 APIFY_TOKEN=$APIFY_TOKEN
 APIFY_ACTOR=${APIFY_ACTOR:-apify/instagram-scraper}
 SYNC_INTERVAL_MS=${SYNC_INTERVAL_MS:-21600000}
+TELEGRAM_BOT_USERNAME=$TELEGRAM_BOT_USERNAME
+TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 EOF_ENV
 mkdir -p "$APP_DIR/data"
 cat >/etc/systemd/system/pifpaf-creators.service <<EOF_SERVICE
