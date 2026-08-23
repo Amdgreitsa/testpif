@@ -133,7 +133,12 @@ install -d -m 755 "$APP_DIR"
 # Do not copy a developer's local database into the server. On first install this
 # lets server.js seed the administrator from the values entered above; on updates
 # the existing production data remains untouched.
-tar --exclude='./data' --exclude='./.env' -C "$SOURCE_DIR" -cf - . | tar -C "$APP_DIR" -xf -
+tar --exclude='./data' --exclude='./.env' --exclude='./node_modules' -C "$SOURCE_DIR" -cf - . | tar -C "$APP_DIR" -xf -
+[[ -f "$APP_DIR/package-lock.json" ]] || { echo "Не найден package-lock.json после копирования приложения."; exit 1; }
+# Install exactly the dependencies declared by this release. This also removes
+# modules left by an older release, preventing a missing or stale module from
+# stopping systemd after an update.
+npm ci --omit=dev --prefix "$APP_DIR"
 cat >"$APP_DIR/.env" <<EOF_ENV
 PORT=$PORT
 NODE_ENV=production
