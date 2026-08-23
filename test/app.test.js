@@ -26,7 +26,21 @@ test('authenticated dashboard API persists a seeded account and protects private
   } finally { child.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); }
 });
 
+test('configured administrator credentials replace credentials from a previous installation', async () => {
+  const port = await getPort(); const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pifpaf-admin-test-'));
+  const start = env => spawn(process.execPath, ['server.js'], { cwd: path.resolve(__dirname, '..'), env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, ...env } });
+  const waitForHealth = async () => { for (let attempt = 0; attempt < 40; attempt += 1) { try { const response = await fetch(`http://127.0.0.1:${port}/api/health`); if (response.ok) return; } catch {} await wait(50); } throw new Error('Server did not start'); };
+  let child = start({ ADMIN_EMAIL: 'old@example.com', ADMIN_PASSWORD: 'old-install-password' });
+  try {
+    await waitForHealth(); child.kill(); await new Promise(resolve => child.once('exit', resolve));
+    child = start({ ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'correct-install-password' });
+    await waitForHealth();
+    const login = await fetch(`http://127.0.0.1:${port}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'admin@example.com', password: 'correct-install-password' }) });
+    assert.equal(login.status, 200);
+  } finally { child.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); }
+});
+
 test('installer normalizes a copied URL and the browser never embeds an Apify secret', () => {
   const server = fs.readFileSync('server.js', 'utf8'); const app = fs.readFileSync('app.js', 'utf8'); const install = fs.readFileSync('install.sh', 'utf8'); const html = fs.readFileSync('index.html', 'utf8');
-  assert.match(server, /api\.apify\.com/); assert.match(server, /APIFY_TOKEN/); assert.match(server, /api\/accounts\/import/); assert.match(server, /fetchProfileReels/); assert.match(install, /certbot/); assert.match(install, /systemctl enable/); assert.match(install, /APP_DIR="\/opt\/pifpaf-creators"/); assert.match(install, /cp -a "\$SOURCE_DIR"/); assert.match(install, /curl nginx/); assert.match(install, /while true; do/); assert.match(install, /normalize_domain/); assert.match(install, /--update/); assert.match(install, /check_dns/); assert.match(install, /wait_for_health/); assert.match(app, /settingsForm/); assert.match(app, /api\/accounts\/import/); assert.doesNotMatch(app, /apify_api_/); assert.doesNotMatch(html, /APIFY_TOKEN|APIFY_ACTOR|SYNC_INTERVAL_MS|\.env|переменные окружения/);
+  assert.match(server, /api\.apify\.com/); assert.match(server, /APIFY_TOKEN/); assert.match(server, /syncConfiguredAdmin/); assert.match(server, /api\/accounts\/import/); assert.match(server, /fetchProfileReels/); assert.match(install, /certbot/); assert.match(install, /systemctl enable/); assert.match(install, /APP_DIR="\/opt\/pifpaf-creators"/); assert.match(install, /tar --exclude='\.\/data'/); assert.match(install, /curl nginx/); assert.match(install, /while true; do/); assert.match(install, /normalize_domain/); assert.match(install, /--update/); assert.match(install, /check_dns/); assert.match(install, /wait_for_health/); assert.match(app, /settingsForm/); assert.match(app, /api\/accounts\/import/); assert.doesNotMatch(app, /apify_api_/); assert.doesNotMatch(html, /APIFY_TOKEN|APIFY_ACTOR|SYNC_INTERVAL_MS|\.env|переменные окружения/);
 });
