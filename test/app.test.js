@@ -26,7 +26,7 @@ test('authenticated dashboard API persists a seeded account and protects private
   } finally { child.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); }
 });
 
-test('installer keeps deployment dependencies and the browser never embeds an Apify secret', () => {
+test('installer normalizes a copied URL and the browser never embeds an Apify secret', () => {
   const server = fs.readFileSync('server.js', 'utf8'); const app = fs.readFileSync('app.js', 'utf8'); const install = fs.readFileSync('install.sh', 'utf8');
-  assert.match(server, /api\.apify\.com/); assert.match(server, /APIFY_TOKEN/); assert.match(install, /certbot/); assert.match(install, /systemctl enable/); assert.match(install, /curl nginx/); assert.doesNotMatch(app, /apify_api_/);
+  assert.match(server, /api\.apify\.com/); assert.match(server, /APIFY_TOKEN/); assert.match(install, /certbot/); assert.match(install, /systemctl enable/); assert.match(install, /curl nginx/); assert.match(install, /while true; do/); assert.match(install, /DOMAIN="\$\{DOMAIN#https:\/\/\}"/); assert.match(install, /DOMAIN="\$\{DOMAIN%%\/\*\}"/); assert.doesNotMatch(app, /apify_api_/);
 });

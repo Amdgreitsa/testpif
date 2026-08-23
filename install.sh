@@ -3,13 +3,26 @@ set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then echo "Запустите через sudo: sudo bash install.sh"; exit 1; fi
 command -v apt-get >/dev/null || { echo "Поддерживаются только Debian/Ubuntu-серверы с apt-get."; exit 1; }
-read -rp "Домен для кабинета (например, creators.example.com): " DOMAIN
+while true; do
+  read -rp "Домен для кабинета (например, creators.example.com): " DOMAIN
+  # Accept a copied URL as well as a bare domain: https://creators.example.com/path
+  # Certbot only needs the hostname, so remove the protocol, path, port and trailing dot.
+  DOMAIN="${DOMAIN#http://}"
+  DOMAIN="${DOMAIN#https://}"
+  DOMAIN="${DOMAIN%%/*}"
+  DOMAIN="${DOMAIN%%:*}"
+  DOMAIN="${DOMAIN%.}"
+  DOMAIN="${DOMAIN,,}"
+  if [[ "$DOMAIN" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$DOMAIN" == *.* ]]; then
+    break
+  fi
+  echo "Не удалось распознать домен. Введите, например: creators.example.com"
+done
 read -rp "Email для Let's Encrypt: " EMAIL
 read -rp "Порт приложения [3000]: " PORT; PORT=${PORT:-3000}
 read -rp "Email первого администратора: " ADMIN_EMAIL
 read -rsp "Пароль первого администратора: " ADMIN_PASSWORD; echo
 read -rsp "Apify API token (оставьте пустым, если добавите позже): " APIFY_TOKEN; echo
-[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Укажите корректный домен без https:// и пути."; exit 1; }
 [[ -n "$DOMAIN" && -n "$EMAIL" ]] || { echo "Домен и email обязательны."; exit 1; }
 [[ -n "$ADMIN_EMAIL" && -n "$ADMIN_PASSWORD" ]] || { echo "Данные администратора обязательны."; exit 1; }
 [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { echo "Пароль администратора должен содержать не менее 12 символов."; exit 1; }
