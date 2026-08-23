@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#fbf9f5" />
+  <title>PifPaf — кабинет блогера</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <section class="login-screen" id="loginScreen">
+    <form class="login-card" id="loginForm">
+      <a class="brand" href="#"><span class="brand-mark">pif<br>paf</span><span>creators</span></a>
+      <p class="eyebrow">ВНУТРЕННИЙ КАБИНЕТ</p><h1>Рады вас<br><em>видеть.</em></h1>
+      <p class="muted">Войдите, чтобы посмотреть результаты ваших Reels.</p>
+      <label>Email<input id="email" type="email" autocomplete="email" required placeholder="admin@pifpaf.local" /></label>
+      <label>Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="••••••••" /></label>
+      <p class="form-error" id="loginError"></p><button class="add-btn full">Войти →</button>
+      <small>Тестовый вход: <code>admin@pifpaf.local</code> / <code>change-me-now</code>. Смените его через переменные окружения перед запуском.</small>
+    </form>
+  </section>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#"><span class="brand-mark">pif<br>paf</span><span>creators</span></a>
+      <nav aria-label="Основная навигация">
+        <a class="nav-link active" href="#overview"><span>◉</span> Обзор</a>
+        <a class="nav-link" href="#reels"><span>▣</span> Рилсы</a>
+        <a class="nav-link" href="#analytics"><span>⌁</span> Аналитика</a>
+        <a class="nav-link" href="#team"><span>◎</span> Команда</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="settings-btn" id="openSettings"><span>⚙</span> Интеграция</button>
+        <div class="user-card"><div class="avatar orange" id="avatar">АР</div><div><b id="userName">Алина Романова</b><small id="userHandle">@alina.creates</small></div><button id="logout" aria-label="Выйти">↗</button></div>
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div class="mobile-brand">pif paf</div>
+        <div class="period"><button>‹</button><span>01 — 30 июля, 2025</span><button>›</button></div>
+        <div class="top-actions"><button class="icon-btn" aria-label="Уведомления">♧<i></i></button><button class="add-btn" id="openAdd">+ Добавить рилс</button></div>
+      </header>
+      <section id="overview" class="content">
+        <div class="welcome-row"><div><p class="eyebrow" id="greeting">ДОБРОЕ УТРО ✦</p><h1>Ваше творчество<br><em>в цифрах.</em></h1></div><p class="freshness"><span></span> <span id="freshnessText">Загружаем данные…</span></p></div>
+        <section class="stats-grid" aria-label="Ключевые показатели">
+          <article class="stat-card peach"><p>ПРОСМОТРЫ</p><strong id="viewsTotal">—</strong><small>по всем рилсам</small><div class="sparkline peach-line">╱╲▁▃▂▆▃█</div></article>
+          <article class="stat-card lavender"><p>ВОВЛЕЧЕНИЕ</p><strong id="engagement">—</strong><small>лайки + комментарии</small><div class="sparkline purple-line">▁▂▃▂▅▄▆█</div></article>
+          <article class="stat-card mint"><p>ЛАЙКИ</p><strong id="likesTotal">—</strong><small>по всем рилсам</small><div class="sparkline green-line">▃▅▂▆▄▃▇▅</div></article>
+          <article class="stat-card yellow"><p>РИЛСОВ В БАЗЕ</p><strong id="reelsTotal">—</strong><small>синхронизация сервером</small><div class="rating-dots">● ● ● ● ◐</div></article>
+        </section>
+        <section class="section-heading"><div><p class="eyebrow">ВАШ КОНТЕНТ</p><h2>Последние рилсы</h2></div><div class="switcher"><button class="selected" data-view="grid">▦</button><button data-view="list">☷</button></div></section>
+        <section class="reels-grid" id="reels"></section>
+        <button class="show-more" id="showMore">Показать все рилсы <span>→</span></button>
+        <section id="analytics" class="analytics-panel"><div><p class="eyebrow">АНАЛИТИКА</p><h2>Ритм просмотров</h2><p class="muted">Лучший день недели — четверг. Аудитория особенно активно смотрит видео в 19:00–21:00.</p></div><div class="chart" aria-label="График просмотров"><div class="bars"><i style="height:28%"></i><i style="height:42%"></i><i style="height:34%"></i><i style="height:63%"></i><i style="height:51%"></i><i style="height:88%"></i><i style="height:72%"></i></div><div class="chart-labels"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div></div></section>
+      </section>
+    </main>
+  </div>
+  <dialog id="addDialog"><form method="dialog" id="reelForm"><button class="close" value="cancel">×</button><p class="eyebrow">НОВЫЙ РИЛС</p><h2>Добавьте ссылку из Instagram</h2><p class="muted">Мы подтянем обложку, дату и показатели через Apify.</p><label>Ссылка на рилс<input id="reelUrl" type="url" placeholder="https://instagram.com/reel/..." required /></label><button class="add-btn full" value="default">Подтянуть данные →</button></form></dialog>
+  <dialog id="settingsDialog"><form method="dialog"><button class="close" value="cancel">×</button><p class="eyebrow">ИНТЕГРАЦИЯ</p><h2>Подключить Apify</h2><p class="muted">Токен Apify хранится только на сервере в переменной <code>APIFY_TOKEN</code>. Добавьте его в файл <code>.env</code> и перезапустите сервис.</p><p class="dialog-note">После этого все рилсы можно синхронизировать автоматически по расписанию. Ключ никогда не передаётся в браузер.</p></form></dialog>
+  <template id="reelTemplate"><article class="reel-card"><div class="cover"><img alt="Обложка рилса" /><span class="reel-type">REEL</span><span class="duration"></span><button class="more" aria-label="Меню рилса">•••</button></div><div class="reel-info"><div><h3></h3><p class="date"></p></div><button class="save" aria-label="Сохранить">♡</button></div><div class="metrics"><span>▶ <b class="view-count"></b></span><span>♡ <b class="like-count"></b></span><span>◌ <b class="comment-count"></b></span></div></article></template>
+  <script src="app.js"></script>
+</body>
+</html>
