@@ -2,6 +2,10 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const QRCode = require('qrcode');
+const { TelegramClient } = require('telegram');
+const { StringSession } = require('telegram/sessions');
+const { Api } = require('telegram');
 
 const root = __dirname;
 const envFile = path.join(root, '.env');
@@ -21,6 +25,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SESSION_TTL = 1000 * 60 * 60 * 24 * 14;
 const isProduction = process.env.NODE_ENV === 'production';
 const loginAttempts = new Map();
+const telegramLogins = new Map();
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8' };
 
 fs.mkdirSync(dataDir, { recursive: true });
