@@ -24,6 +24,8 @@ test('authenticated dashboard API persists a seeded account and protects private
     telegramPayload.hash = crypto.createHmac('sha256', crypto.createHash('sha256').update('123456:telegram-test-token').digest()).update(signedFields).digest('hex');
     const telegramLogin = await fetch(`http://127.0.0.1:${port}/api/auth/telegram/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(telegramPayload) });
     assert.equal(telegramLogin.status, 200); assert.equal((await telegramLogin.json()).user.role, 'creator'); const creatorCookie = telegramLogin.headers.get('set-cookie');
+    const creatorDashboard = await fetch(`http://127.0.0.1:${port}/api/dashboard`, { headers: { cookie: creatorCookie } });
+    assert.equal(creatorDashboard.status, 200); assert.deepEqual((await creatorDashboard.json()).accounts, []);
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/dashboard`)).status, 401);
     const login = await fetch(`http://127.0.0.1:${port}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'admin@test.local', password: 'long-test-password' }) });
     assert.equal(login.status, 200); const cookie = login.headers.get('set-cookie'); assert.match(cookie, /HttpOnly/);
@@ -75,4 +77,14 @@ test('profile import keeps long-running Apify requests alive and reports non-JSO
   assert.match(app, /Рилсов: \$\{data\.total\}/);
   assert.match(install, /proxy_read_timeout 10m/);
   assert.match(install, /proxy_send_timeout 10m/);
+});
+
+test('Telegram placeholders stay separate from Instagram accounts and Apify datasets are read completely', () => {
+  const server = fs.readFileSync('server.js', 'utf8');
+
+  assert.match(server, /!a\.isTelegramPlaceholder/);
+  assert.match(server, /acts\/\$\{encodeURIComponent\(APIFY_ACTOR\)\}\/runs/);
+  assert.match(server, /actor-runs\/\$\{encodeURIComponent\(runId\)\}/);
+  assert.match(server, /datasets\/\$\{encodeURIComponent\(run\.defaultDatasetId\)\}\/items\?clean=true&offset=/);
+  assert.match(server, /const processed = new Set\(\)/);
 });
