@@ -16,6 +16,7 @@ const dbFile = path.join(dataDir, 'db.json');
 const PORT = Number(process.env.PORT || 3000);
 const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
 const APIFY_ACTOR = process.env.APIFY_ACTOR || 'apify/instagram-scraper';
+const MAX_IMPORT_REELS = 500;
 const TELEGRAM_BOT_USERNAME = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SESSION_TTL = 1000 * 60 * 60 * 24 * 14;
@@ -71,24 +72,53 @@ function loginWithTelegram(payload, db) {
     const name = [payload.first_name, payload.last_name].filter(Boolean).join(' ') || `Telegram ${telegramId}`;
     const handle = payload.username ? `@${payload.username}` : `@telegram_${telegramId}`;
     user = { id: id(), name, email: `telegram-${telegramId}@pifpaf.local`, passwordHash: hash(crypto.randomBytes(32).toString('hex')), role: 'creator', telegramId, createdAt: new Date().toISOString() };
-    db.users.push(user); db.accounts.push({ id: id(), userId: user.id, handle, name });
+    db.users.push(user); db.accounts.push({ id: id(), userId: user.id, handle, name, isTelegramPlaceholder: true });
   }
   return { user, token: createSession(db, user) };
 }
 const compact = number => new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(number || 0);
 function reelDto(reel) { return { ...reel, formattedViews: compact(reel.views), formattedLikes: compact(reel.likes) }; }
-function analytics(db, user) { const accounts = db.accounts.filter(a => user.role === 'admin' || a.userId === user.id); const accountIds = new Set(accounts.map(a => a.id)); const reels = db.reels.filter(r => accountIds.has(r.accountId)); const views = reels.reduce((sum, r) => sum + (r.views || 0), 0); const likes = reels.reduce((sum, r) => sum + (r.likes || 0), 0); const comments = reels.reduce((sum, r) => sum + (r.comments || 0), 0); const engagement = views ? ((likes + comments) / views) * 100 : 0; return { views, likes, comments, engagement: Number(engagement.toFixed(1)), reels: reels.length, updatedAt: reels.map(r => r.syncedAt).filter(Boolean).sort().at(-1) || null }; }
+function analytics(db, user) {
+  const accounts = db.accounts.filter(a => user.role === 'admin' || a.userId === user.id);
+  const accountIds = new Set(accounts.map(a => a.id));
+  const reels = db.reels.filter(r => accountIds.has(r.accountId));
+  const views = reels.reduce((sum, r) => sum + (r.views || 0), 0);
+  const likes = reels.reduce((sum, r) => sum + (r.likes || 0), 0);
+  const comments = reels.reduce((sum, r) => sum + (r.comments || 0), 0);
+  const engagement = views ? ((likes + comments) / views) * 100 : 0;
+  const dayViews = Array(7).fill(0);
+  reels.forEach(reel => {
+    const date = new Date(reel.publishedAt);
+    if (!Number.isNaN(date.getTime())) dayViews[(date.getDay() + 6) % 7] += reel.views || 0;
+  });
+  const max = Math.max(...dayViews, 0);
+  const bestDayIndex = max ? dayViews.indexOf(max) : null;
+  return {
+    views, likes, comments, engagement: Number(engagement.toFixed(1)), reels: reels.length,
+    updatedAt: reels.map(r => r.syncedAt).filter(Boolean).sort().at(-1) || null,
+    rhythm: { dayViews, peakViews: max, bestDay: bestDayIndex === null ? null : ['понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу', 'воскресенье'][bestDayIndex] }
+  };
+}
 function apifyEndpoint() { return `https://api.apify.com/v2/acts/${encodeURIComponent(APIFY_ACTOR)}/run-sync-get-dataset-items?token=${encodeURIComponent(APIFY_TOKEN)}`; }
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 async function runApify(input) {
   if (!APIFY_TOKEN) throw new Error('APIFY_TOKEN не настроен на сервере');
-  const response = await fetch(apifyEndpoint(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
-  if (!response.ok) throw new Error(`Apify вернул ${response.status}`);
-  return response.json();
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(apifyEndpoint(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      if (response.ok) { const items = await response.json(); if (!Array.isArray(items)) throw new Error('Apify вернул неожиданный формат данных'); return items; }
+      lastError = new Error(`Apify вернул ${response.status}`);
+      if (response.status < 500 && response.status !== 429) throw lastError;
+    } catch (error) { lastError = error; }
+    if (attempt < 2) await delay(600 * (attempt + 1));
+  }
+  throw lastError || new Error('Не удалось получить данные из Apify');
 }
 async function fetchInstagram(url) { const [item] = await runApify({ directUrls: [url], resultsType: 'posts', resultsLimit: 1 }); if (!item) throw new Error('Apify не вернул данные по этой ссылке'); return item; }
 function profileUrl(handle) { const clean = String(handle || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0]; if (!/^[a-z0-9._]{1,30}$/i.test(clean)) throw new Error('Укажите корректный Instagram handle'); return { handle: `@${clean}`, url: `https://www.instagram.com/${clean}/` }; }
 async function fetchProfileReels(handle, limit) {
-  const profile = profileUrl(handle); const requested = Math.min(Math.max(Number(limit) || 50, 1), 50); const items = await runApify({ directUrls: [profile.url], resultsType: 'posts', resultsLimit: requested, onlyPostsNewerThan: '10 years' }); const reels = items.filter(item => item.type === 'Video' || item.productType === 'clips' || /\/reel\//.test(item.url || item.shortCode || ''));
+  const profile = profileUrl(handle); const requested = Math.min(Math.max(Number(limit) || MAX_IMPORT_REELS, 1), MAX_IMPORT_REELS); const items = await runApify({ directUrls: [profile.url], resultsType: 'posts', resultsLimit: requested, onlyPostsNewerThan: '10 years' }); const reels = items.filter(item => item.type === 'Video' || item.productType === 'clips' || item.videoUrl || /\/reel\//.test(item.url || item.shortCode || ''));
   return { ...profile, items: reels, requested, received: items.length, skipped: items.length - reels.length };
 }
 function normalize(item, url) { const sourceUrl = item.url || (item.shortCode ? `https://www.instagram.com/reel/${item.shortCode}/` : url); return { sourceUrl, title: (item.caption || 'Новый рилс').replace(/\s+/g, ' ').slice(0, 90), publishedAt: item.timestamp || new Date().toISOString(), views: Number(item.videoViewCount || item.videoPlayCount || 0), likes: Number(item.likesCount || 0), comments: Number(item.commentsCount || 0), duration: Number(item.videoDuration || 0), coverUrl: item.displayUrl || item.thumbnailUrl || null }; }
@@ -107,7 +137,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/api/reels' && req.method === 'POST') { const signed = auth(req, res, db); if (!signed) return; const { sourceUrl, accountId } = await body(req); if (!/^https:\/\/(www\.)?instagram\.com\/reel\//i.test(sourceUrl || '')) return send(res, 422, { error: 'Укажите корректную ссылку Instagram Reel' }); const account = accountForUser(db, signed, accountId); if (!account) return send(res, 403, { error: 'Нет доступа к выбранному аккаунту' }); const reel = { id: id(), accountId: account.id, sourceUrl, title: 'Рилс добавлен — ожидает синхронизации', publishedAt: new Date().toISOString(), views: 0, likes: 0, comments: 0, duration: 0, coverUrl: null, syncStatus: 'pending', syncedAt: null, createdAt: new Date().toISOString() }; db.reels.push(reel); saveDb(db); try { await syncReel(db, reel); } catch (error) { reel.syncStatus = 'failed'; reel.syncError = error.message; saveDb(db); } return send(res, 201, { reel: reelDto(reel) }); }
     const match = url.pathname.match(/^\/api\/reels\/([^/]+)\/sync$/); if (match && req.method === 'POST') { const signed = auth(req, res, db); if (!signed) return; const reel = db.reels.find(r => r.id === match[1]); if (!reel) return send(res, 404, { error: 'Рилс не найден' }); const account = db.accounts.find(a => a.id === reel.accountId); if (!canAccessAccount(signed, account)) return send(res, 403, { error: 'Нет доступа' }); try { await syncReel(db, reel); return send(res, 200, { reel: reelDto(reel) }); } catch (error) { reel.syncStatus = 'failed'; reel.syncError = error.message; saveDb(db); return send(res, 502, { error: error.message }); } }
 
-    if (url.pathname === '/api/accounts/import' && req.method === 'POST') { const signed = auth(req, res, db); if (!signed) return; const { handle, limit } = await body(req); let imported; try { imported = await fetchProfileReels(handle, limit); } catch (error) { return send(res, error.message.includes('handle') ? 422 : 502, { error: error.message }); } let account = db.accounts.find(a => a.userId === signed.id && a.handle.toLowerCase() === imported.handle.toLowerCase()); if (!account) { account = { id: id(), userId: signed.id, handle: imported.handle, name: signed.name }; db.accounts.push(account); } let created = 0; let updated = 0; for (const item of imported.items) { const data = normalize(item, item.url || imported.url); const existing = db.reels.find(r => r.accountId === account.id && r.sourceUrl === data.sourceUrl); if (existing) { Object.assign(existing, data, { syncedAt: new Date().toISOString(), syncStatus: 'synced', syncError: null }); updated += 1; db.snapshots.push({ id: id(), reelId: existing.id, views: existing.views, likes: existing.likes, comments: existing.comments, capturedAt: existing.syncedAt }); } else { const reel = { id: id(), accountId: account.id, ...data, syncStatus: 'synced', syncError: null, syncedAt: new Date().toISOString(), createdAt: new Date().toISOString() }; db.reels.push(reel); created += 1; db.snapshots.push({ id: id(), reelId: reel.id, views: reel.views, likes: reel.likes, comments: reel.comments, capturedAt: reel.syncedAt }); } } saveDb(db); return send(res, 201, { account, created, updated, total: imported.items.length, requested: imported.requested, received: imported.received, skipped: imported.skipped }); }
+    if (url.pathname === '/api/accounts/import' && req.method === 'POST') { const signed = auth(req, res, db); if (!signed) return; const { handle, limit } = await body(req); let imported; try { imported = await fetchProfileReels(handle, limit); } catch (error) { return send(res, error.message.includes('handle') ? 422 : 502, { error: error.message }); } let account = db.accounts.find(a => a.userId === signed.id && a.handle.toLowerCase() === imported.handle.toLowerCase()); if (!account) { const ownAccounts = db.accounts.filter(a => a.userId === signed.id); const placeholder = ownAccounts.find(a => a.isTelegramPlaceholder) || (signed.telegramId && ownAccounts.length === 1 && !db.reels.some(r => r.accountId === ownAccounts[0].id) ? ownAccounts[0] : null); if (placeholder) { placeholder.handle = imported.handle; placeholder.name = signed.name; placeholder.isTelegramPlaceholder = false; account = placeholder; } else { account = { id: id(), userId: signed.id, handle: imported.handle, name: signed.name }; db.accounts.push(account); } } let created = 0; let updated = 0; for (const item of imported.items) { const data = normalize(item, item.url || imported.url); const existing = db.reels.find(r => r.accountId === account.id && r.sourceUrl === data.sourceUrl); if (existing) { Object.assign(existing, data, { syncedAt: new Date().toISOString(), syncStatus: 'synced', syncError: null }); updated += 1; db.snapshots.push({ id: id(), reelId: existing.id, views: existing.views, likes: existing.likes, comments: existing.comments, capturedAt: existing.syncedAt }); } else { const reel = { id: id(), accountId: account.id, ...data, syncStatus: 'synced', syncError: null, syncedAt: new Date().toISOString(), createdAt: new Date().toISOString() }; db.reels.push(reel); created += 1; db.snapshots.push({ id: id(), reelId: reel.id, views: reel.views, likes: reel.likes, comments: reel.comments, capturedAt: reel.syncedAt }); } } saveDb(db); return send(res, 201, { account, created, updated, total: imported.items.length, requested: imported.requested, received: imported.received, skipped: imported.skipped }); }
     if (url.pathname === '/api/accounts' && req.method === 'POST') { const signed = auth(req, res, db); if (!signed) return; const { handle, name } = await body(req); if (!handle) return send(res, 422, { error: 'Укажите Instagram handle' }); const account = { id: id(), userId: signed.id, handle: handle.startsWith('@') ? handle : `@${handle}`, name: name || signed.name }; db.accounts.push(account); saveDb(db); return send(res, 201, { account }); }
     const publicFiles = { '/': 'index.html', '/index.html': 'index.html', '/styles.css': 'styles.css', '/app.js': 'app.js', '/favicon.svg': 'favicon.svg' }; const filename = publicFiles[url.pathname]; if (!filename) { res.writeHead(404); return res.end('Not found'); } const file = path.join(root, filename); res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' }); fs.createReadStream(file).pipe(res);
   } catch (error) { console.error(error); send(res, 500, { error: error.message || 'Ошибка сервера' }); }
