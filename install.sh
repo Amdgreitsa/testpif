@@ -26,14 +26,19 @@ read -rsp "Apify API token (оставьте пустым, если добави
 [[ -n "$DOMAIN" && -n "$EMAIL" ]] || { echo "Домен и email обязательны."; exit 1; }
 [[ -n "$ADMIN_EMAIL" && -n "$ADMIN_PASSWORD" ]] || { echo "Данные администратора обязательны."; exit 1; }
 [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { echo "Пароль администратора должен содержать не менее 12 символов."; exit 1; }
-APP_DIR="$(cd "$(dirname "$0")" && pwd)"
-[[ -f "$APP_DIR/server.js" && -f "$APP_DIR/index.html" ]] || { echo "Запускайте скрипт из папки проекта PifPaf Creators."; exit 1; }
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+[[ -f "$SOURCE_DIR/server.js" && -f "$SOURCE_DIR/index.html" ]] || { echo "Запускайте скрипт из папки проекта PifPaf Creators."; exit 1; }
+# The service runs as www-data. Do not run it directly from /root: www-data cannot
+# traverse that directory even when files inside it are chowned correctly.
+APP_DIR="/opt/pifpaf-creators"
 echo "Устанавливаем Node.js, Nginx и Certbot…"
 apt-get update
 apt-get install -y curl nginx certbot python3-certbot-nginx nodejs
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 [[ "$NODE_MAJOR" -ge 18 ]] || { echo "Требуется Node.js 18 или новее, найден: $(node --version)"; exit 1; }
 umask 077
+install -d -m 755 "$APP_DIR"
+cp -a "$SOURCE_DIR"/. "$APP_DIR"/
 cat >"$APP_DIR/.env" <<EOF
 PORT=$PORT
 NODE_ENV=production
