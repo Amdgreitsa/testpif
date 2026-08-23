@@ -25,11 +25,23 @@ fs.mkdirSync(dataDir, { recursive: true });
 const id = () => crypto.randomUUID();
 const hash = password => { const salt = crypto.randomBytes(16).toString('hex'); return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`; };
 const verify = (password, stored) => { const [salt, key] = stored.split(':'); return crypto.timingSafeEqual(Buffer.from(key, 'hex'), crypto.scryptSync(password, salt, 64)); };
+const configuredAdmin = () => ({ email: process.env.ADMIN_EMAIL || 'admin@pifpaf.local', password: process.env.ADMIN_PASSWORD || 'change-me-now' });
+const adminFingerprint = ({ email, password }) => crypto.createHash('sha256').update(`${email}\0${password}`).digest('hex');
 function seed() {
-  const user = { id: id(), name: 'Алина Романова', email: process.env.ADMIN_EMAIL || 'admin@pifpaf.local', passwordHash: hash(process.env.ADMIN_PASSWORD || 'change-me-now'), role: 'admin', createdAt: new Date().toISOString() };
-  return { users: [user], accounts: [{ id: id(), userId: user.id, handle: '@alina.creates', name: 'Алина Романова' }], reels: [], snapshots: [], sessions: [] };
+  const admin = configuredAdmin(); const user = { id: id(), name: 'Алина Романова', email: admin.email, passwordHash: hash(admin.password), role: 'admin', createdAt: new Date().toISOString() };
+  return { users: [user], accounts: [{ id: id(), userId: user.id, handle: '@alina.creates', name: 'Алина Романова' }], reels: [], snapshots: [], sessions: [], adminCredentialFingerprint: adminFingerprint(admin) };
 }
-function readDb() { if (!fs.existsSync(dbFile)) { const db = seed(); fs.writeFileSync(dbFile, JSON.stringify(db, null, 2)); return db; } return JSON.parse(fs.readFileSync(dbFile, 'utf8')); }
+function syncConfiguredAdmin(db) {
+  const admin = configuredAdmin(); const fingerprint = adminFingerprint(admin);
+  if (db.adminCredentialFingerprint === fingerprint) return false;
+  const user = db.users.find(item => item.role === 'admin');
+  if (!user) return false;
+  user.email = admin.email;
+  user.passwordHash = hash(admin.password);
+  db.adminCredentialFingerprint = fingerprint;
+  return true;
+}
+function readDb() { if (!fs.existsSync(dbFile)) { const db = seed(); fs.writeFileSync(dbFile, JSON.stringify(db, null, 2)); return db; } const db = JSON.parse(fs.readFileSync(dbFile, 'utf8')); if (syncConfiguredAdmin(db)) saveDb(db); return db; }
 function saveDb(db) { const temporary = `${dbFile}.${process.pid}.tmp`; fs.writeFileSync(temporary, JSON.stringify(db, null, 2), { mode: 0o600 }); fs.renameSync(temporary, dbFile); }
 function send(res, status, value, headers = {}) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', ...headers }); res.end(JSON.stringify(value)); }
 function cookies(req) { return Object.fromEntries((req.headers.cookie || '').split(';').filter(Boolean).map(v => v.trim().split('=').map(decodeURIComponent))); }

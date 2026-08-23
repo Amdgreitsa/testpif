@@ -121,7 +121,10 @@ NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 
 umask 077
 install -d -m 755 "$APP_DIR"
-cp -a "$SOURCE_DIR"/. "$APP_DIR"/
+# Do not copy a developer's local database into the server. On first install this
+# lets server.js seed the administrator from the values entered above; on updates
+# the existing production data remains untouched.
+tar --exclude='./data' --exclude='./.env' -C "$SOURCE_DIR" -cf - . | tar -C "$APP_DIR" -xf -
 cat >"$APP_DIR/.env" <<EOF_ENV
 PORT=$PORT
 NODE_ENV=production
