@@ -75,6 +75,16 @@ wait_for_health() {
   return 1
 }
 
+wait_for_public_https() {
+  local domain="$1"
+  if curl --fail --silent --show-error --connect-timeout 10 --max-time 30 "https://$domain/api/health" >/dev/null; then return 0; fi
+  echo "HTTPS-проверка https://$domain/api/health не прошла."
+  echo "Проверьте, что TCP-порт 443 открыт в firewall/панели VPS, а Nginx слушает сертификат:"
+  systemctl status nginx --no-pager || true
+  if command -v ss >/dev/null; then ss -ltnp '( sport = :80 or sport = :443 )' || true; fi
+  return 1
+}
+
 wait_for_package_manager() {
   local elapsed=0
   command -v fuser >/dev/null || { echo "Утилита fuser недоступна; apt будет самостоятельно ждать блокировку dpkg до ${APT_LOCK_TIMEOUT} секунд."; return 0; }
@@ -187,6 +197,20 @@ EOF_SERVICE
 chown -R www-data:www-data "$APP_DIR"
 chown root:www-data "$APP_DIR/.env"
 chmod 640 "$APP_DIR/.env"
+TLS_SERVER=""
+if [[ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" && -f "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]]; then
+  TLS_SERVER=$(cat <<EOF_TLS
+server {
+  listen 443 ssl;
+  server_name $DOMAIN;
+  client_max_body_size 1m;
+  ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+  location / { proxy_pass http://127.0.0.1:$PORT; proxy_http_version 1.1; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; }
+}
+EOF_TLS
+)
+fi
 cat >/etc/nginx/sites-available/pifpaf-creators <<EOF_NGINX
 server {
   listen 80;
@@ -194,6 +218,7 @@ server {
   client_max_body_size 1m;
   location / { proxy_pass http://127.0.0.1:$PORT; proxy_http_version 1.1; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; }
 }
+$TLS_SERVER
 EOF_NGINX
 ln -sf /etc/nginx/sites-available/pifpaf-creators /etc/nginx/sites-enabled/pifpaf-creators
 rm -f /etc/nginx/sites-enabled/default
@@ -213,4 +238,5 @@ fi
 
 systemctl is-active --quiet pifpaf-creators || { journalctl -u pifpaf-creators -n 80 --no-pager; exit 1; }
 wait_for_health "$PORT"
+wait_for_public_https "$DOMAIN"
 echo "Готово: https://$DOMAIN"
