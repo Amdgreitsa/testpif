@@ -23,14 +23,17 @@ test('authenticated dashboard API persists a seeded account and protects private
     const signedFields = Object.entries(telegramPayload).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${key}=${value}`).join('\n');
     telegramPayload.hash = crypto.createHmac('sha256', crypto.createHash('sha256').update('123456:telegram-test-token').digest()).update(signedFields).digest('hex');
     const telegramLogin = await fetch(`http://127.0.0.1:${port}/api/auth/telegram/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(telegramPayload) });
-    assert.equal(telegramLogin.status, 200); assert.equal((await telegramLogin.json()).user.role, 'creator');
+    assert.equal(telegramLogin.status, 200); assert.equal((await telegramLogin.json()).user.role, 'creator'); const creatorCookie = telegramLogin.headers.get('set-cookie');
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/dashboard`)).status, 401);
     const login = await fetch(`http://127.0.0.1:${port}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'admin@test.local', password: 'long-test-password' }) });
     assert.equal(login.status, 200); const cookie = login.headers.get('set-cookie'); assert.match(cookie, /HttpOnly/);
     const dashboard = await fetch(`http://127.0.0.1:${port}/api/dashboard`, { headers: { cookie } }); const data = await dashboard.json();
     assert.equal(dashboard.status, 200); assert.equal(data.accounts[0].handle, '@alina.creates'); assert.equal(data.analytics.reels, 0);
+    const crossAccountReel = await fetch(`http://127.0.0.1:${port}/api/reels`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: creatorCookie }, body: JSON.stringify({ sourceUrl: 'https://instagram.com/reel/not-owned/', accountId: data.accounts[0].id }) });
+    assert.equal(crossAccountReel.status, 403);
     const invalidReel = await fetch(`http://127.0.0.1:${port}/api/reels`, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ sourceUrl: 'https://example.com' }) });
     assert.equal(invalidReel.status, 422);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/server.js`)).status, 404);
   } finally { child.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); }
 });
 
