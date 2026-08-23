@@ -24,6 +24,8 @@ test('authenticated dashboard API persists a seeded account and protects private
     telegramPayload.hash = crypto.createHmac('sha256', crypto.createHash('sha256').update('123456:telegram-test-token').digest()).update(signedFields).digest('hex');
     const telegramLogin = await fetch(`http://127.0.0.1:${port}/api/auth/telegram/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(telegramPayload) });
     assert.equal(telegramLogin.status, 200); assert.equal((await telegramLogin.json()).user.role, 'creator'); const creatorCookie = telegramLogin.headers.get('set-cookie');
+    const creatorDashboard = await fetch(`http://127.0.0.1:${port}/api/dashboard`, { headers: { cookie: creatorCookie } });
+    assert.equal(creatorDashboard.status, 200); assert.deepEqual((await creatorDashboard.json()).accounts, []);
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/dashboard`)).status, 401);
     const login = await fetch(`http://127.0.0.1:${port}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'admin@test.local', password: 'long-test-password' }) });
     assert.equal(login.status, 200); const cookie = login.headers.get('set-cookie'); assert.match(cookie, /HttpOnly/);
@@ -55,4 +57,34 @@ test('configured administrator credentials replace credentials from a previous i
 test('installer normalizes a copied URL and the browser never embeds an Apify secret', () => {
   const server = fs.readFileSync('server.js', 'utf8'); const app = fs.readFileSync('app.js', 'utf8'); const install = fs.readFileSync('install.sh', 'utf8'); const html = fs.readFileSync('index.html', 'utf8'); const packageManifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   assert.match(server, /api\.apify\.com/); assert.match(server, /requested: imported\.requested/); assert.match(server, /APIFY_TOKEN/); assert.match(server, /telegramConfigured/); assert.match(server, /syncConfiguredAdmin/); assert.match(server, /verifyTelegramAuth/); assert.match(server, /TELEGRAM_BOT_TOKEN/); assert.match(server, /auth\/telegram\/login/); assert.match(server, /telegramId/); assert.match(server, /role: 'creator'/); assert.doesNotMatch(server, /require\(['"](?:qrcode|telegram)/); assert.doesNotMatch(server, /TELEGRAM_API_HASH|TELEGRAM_ALLOWED_USER_IDS/); assert.deepEqual(packageManifest.dependencies || {}, {}); assert.match(install, /certbot/); assert.match(install, /systemctl enable/); assert.match(install, /APP_DIR="\/opt\/pifpaf-creators"/); assert.match(install, /tar --exclude='\.\/data'/); assert.match(install, /--exclude='\.\/node_modules'/); assert.match(install, /nodejs npm/); assert.match(install, /command -v npm/); assert.match(install, /command -v fuser/); assert.match(install, /wait_for_package_manager/); assert.match(install, /DPkg::Lock::Timeout/); assert.match(install, /npm ci --omit=dev --prefix/); assert.match(install, /TELEGRAM_BOT_TOKEN/); assert.doesNotMatch(install, /TELEGRAM_API_HASH|TELEGRAM_ALLOWED_USER_IDS/); assert.match(install, /verify_runtime_settings/); assert.match(install, /listen 443 ssl/); assert.match(install, /ssl_certificate/); assert.match(install, /wait_for_public_https/); assert.match(install, /https:\/\/\$domain\/api\/health/); assert.match(install, /curl nginx/); assert.match(install, /while true; do/); assert.match(install, /normalize_domain/); assert.match(install, /--update/); assert.match(install, /check_dns/); assert.match(install, /wait_for_health/); assert.match(app, /onTelegramAuth/); assert.match(app, /data\.received/); assert.match(app, /api\/accounts\/import/); assert.match(app, /dismissCookieNotice/); assert.match(app, /renderRhythm/); assert.match(html, /id="acceptCookies" type="button"/); assert.match(html, /id="rhythmBars"/); assert.match(html, /favicon\.svg/); assert.match(html, /value="500"/); assert.match(server, /MAX_IMPORT_REELS = 500/); assert.match(server, /attempt < 3/); assert.match(html, /telegramLogin/); assert.doesNotMatch(app, /apify_api_/); assert.doesNotMatch(html, /APIFY_TOKEN|APIFY_ACTOR|SYNC_INTERVAL_MS|\.env|переменные окружения/);
+});
+
+test('dashboard account handle field is present for dashboard rendering and profile imports', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const html = fs.readFileSync('index.html', 'utf8');
+
+  assert.match(app, /\$\('#accountHandle'\)\.value/);
+  assert.match(html, /<input id="accountHandle"[^>]*required/);
+});
+
+test('profile import keeps long-running Apify requests alive and reports non-JSON proxy failures clearly', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const install = fs.readFileSync('install.sh', 'utf8');
+
+  assert.match(app, /const payload = await response\.text\(\)/);
+  assert.match(app, /Сервер вернул неожиданный ответ вместо JSON/);
+  assert.match(app, /Загружаем до \$\{limit\} рилсов/);
+  assert.match(app, /Рилсов: \$\{data\.total\}/);
+  assert.match(install, /proxy_read_timeout 10m/);
+  assert.match(install, /proxy_send_timeout 10m/);
+});
+
+test('Telegram placeholders stay separate from Instagram accounts and Apify datasets are read completely', () => {
+  const server = fs.readFileSync('server.js', 'utf8');
+
+  assert.match(server, /!a\.isTelegramPlaceholder/);
+  assert.match(server, /acts\/\$\{encodeURIComponent\(APIFY_ACTOR\)\}\/runs/);
+  assert.match(server, /actor-runs\/\$\{encodeURIComponent\(runId\)\}/);
+  assert.match(server, /datasets\/\$\{encodeURIComponent\(run\.defaultDatasetId\)\}\/items\?clean=true&offset=/);
+  assert.match(server, /const processed = new Set\(\)/);
 });
