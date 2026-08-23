@@ -59,6 +59,21 @@ check_dns() {
   return 1
 }
 
+wait_for_health() {
+  local port="$1"
+  for attempt in {1..30}; do
+    if curl --fail --silent --show-error "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; then return 0; fi
+    sleep 1
+  done
+  echo "Приложение не ответило на http://127.0.0.1:$port/api/health за 30 секунд."
+  echo "Последние логи pifpaf-creators:"
+  journalctl -u pifpaf-creators -n 80 --no-pager || true
+  echo "Проверка процесса и порта:"
+  systemctl status pifpaf-creators --no-pager || true
+  if command -v ss >/dev/null; then ss -ltnp "sport = :$port" || true; fi
+  return 1
+}
+
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ -f "$SOURCE_DIR/server.js" && -f "$SOURCE_DIR/index.html" ]] || { echo "Запускайте скрипт из папки проекта PifPaf Creators."; exit 1; }
 
@@ -160,6 +175,6 @@ else
   certbot --nginx --non-interactive --agree-tos -m "$EMAIL" -d "$DOMAIN" --redirect
 fi
 
-systemctl is-active --quiet pifpaf-creators || { journalctl -u pifpaf-creators -n 50 --no-pager; exit 1; }
-curl --fail --silent --show-error "http://127.0.0.1:$PORT/api/health" >/dev/null
+systemctl is-active --quiet pifpaf-creators || { journalctl -u pifpaf-creators -n 80 --no-pager; exit 1; }
+wait_for_health "$PORT"
 echo "Готово: https://$DOMAIN"
