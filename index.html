@@ -39,7 +39,7 @@
     <main>
       <header class="topbar">
         <div class="mobile-brand">pif paf</div>
-        <div class="period"><button>‹</button><span>01 — 30 июля, 2025</span><button>›</button></div>
+        <div class="period"><button data-offset="-1" aria-label="Предыдущий месяц">‹</button><span id="periodText">—</span><button data-offset="1" aria-label="Следующий месяц">›</button></div>
         <div class="top-actions"><button class="icon-btn" aria-label="Уведомления">♧<i></i></button><button class="add-btn" id="openAdd">+ Добавить рилс</button></div>
       </header>
       <section id="overview" class="content">
@@ -52,13 +52,13 @@
         </section>
         <section class="section-heading"><div><p class="eyebrow">ВАШ КОНТЕНТ</p><h2>Последние рилсы</h2></div><div class="switcher"><button class="selected" data-view="grid">▦</button><button data-view="list">☷</button></div></section>
         <section class="reels-grid" id="reels"></section>
-        <button class="show-more" id="showMore">Показать все рилсы <span>→</span></button>
+        <button class="show-more" id="showMore" hidden>Показать все рилсы <span>→</span></button>
         <section id="analytics" class="analytics-panel"><div><p class="eyebrow">АНАЛИТИКА</p><h2>Ритм просмотров</h2><p class="muted">Лучший день недели — четверг. Аудитория особенно активно смотрит видео в 19:00–21:00.</p></div><div class="chart" aria-label="График просмотров"><div class="bars"><i style="height:28%"></i><i style="height:42%"></i><i style="height:34%"></i><i style="height:63%"></i><i style="height:51%"></i><i style="height:88%"></i><i style="height:72%"></i></div><div class="chart-labels"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div></div></section>
       </section>
     </main>
   </div>
-  <dialog id="addDialog"><form method="dialog" id="reelForm"><button class="close" value="cancel">×</button><p class="eyebrow">НОВЫЙ РИЛС</p><h2>Добавьте ссылку из Instagram</h2><p class="muted">Мы подтянем обложку, дату и показатели через Apify.</p><label>Ссылка на рилс<input id="reelUrl" type="url" placeholder="https://instagram.com/reel/..." required /></label><button class="add-btn full" value="default">Подтянуть данные →</button></form></dialog>
-  <dialog id="settingsDialog"><form method="dialog"><button class="close" value="cancel">×</button><p class="eyebrow">ИНТЕГРАЦИЯ</p><h2>Подключить Apify</h2><p class="muted">Токен Apify хранится только на сервере в переменной <code>APIFY_TOKEN</code>. Добавьте его в файл <code>.env</code> и перезапустите сервис.</p><p class="dialog-note">После этого все рилсы можно синхронизировать автоматически по расписанию. Ключ никогда не передаётся в браузер.</p></form></dialog>
+  <dialog id="addDialog"><form id="reelForm"><button class="close" type="button" data-close>×</button><p class="eyebrow">НОВЫЙ РИЛС</p><h2>Добавьте ссылку из Instagram</h2><p class="muted">Мы подтянем обложку, дату и показатели через Apify.</p><label>Ссылка на рилс<input id="reelUrl" type="url" placeholder="https://instagram.com/reel/..." required /></label><button class="add-btn full" value="default">Подтянуть данные →</button></form></dialog>
+  <dialog id="settingsDialog"><form id="settingsForm"><button class="close" type="button" data-close>×</button><p class="eyebrow">ИНТЕГРАЦИЯ</p><h2>Подключить Apify</h2><p class="muted">Токен Apify хранится только на сервере в переменной <code>APIFY_TOKEN</code>. Actor по умолчанию — <code>apify/instagram-scraper</code>; его можно заменить через <code>APIFY_ACTOR</code>.</p><div class="apify-help"><b>Что настроить на сервере</b><ol><li>Создайте токен в Apify → Settings → Integrations.</li><li>Добавьте в <code>.env</code>: <code>APIFY_TOKEN</code>, при необходимости <code>APIFY_ACTOR</code>.</li><li>Для фонового обновления задайте <code>SYNC_INTERVAL_MS=21600000</code> (6 часов).</li></ol></div><label>Instagram профиль<input id="accountHandle" type="text" placeholder="@brand или https://instagram.com/brand" /></label><label>Сколько последних рилсов подтянуть<input id="reelsLimit" type="number" min="1" max="50" value="12" /></label><button class="add-btn full" id="syncAccount">Подключить профиль и подтянуть рилсы →</button><p class="dialog-note">Теперь не нужно добавлять каждый рилс вручную: профиль импортирует последние публикации, а расписание обновляет сохранённые метрики. Ключ никогда не передаётся в браузер.</p></form></dialog>
   <template id="reelTemplate"><article class="reel-card"><div class="cover"><img alt="Обложка рилса" /><span class="reel-type">REEL</span><span class="duration"></span><button class="more" aria-label="Меню рилса">•••</button></div><div class="reel-info"><div><h3></h3><p class="date"></p></div><button class="save" aria-label="Сохранить">♡</button></div><div class="metrics"><span>▶ <b class="view-count"></b></span><span>♡ <b class="like-count"></b></span><span>◌ <b class="comment-count"></b></span></div></article></template>
   <script src="app.js"></script>
 </body>
