@@ -26,14 +26,8 @@
   <div class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#"><span class="brand-mark">pif<br>paf</span><span>creators</span></a>
-      <nav aria-label="Основная навигация">
-        <a class="nav-link active" href="#overview"><span>◉</span> Обзор</a>
-        <a class="nav-link" href="#reels"><span>▣</span> Рилсы</a>
-        <a class="nav-link" href="#analytics"><span>⌁</span> Аналитика</a>
-        <a class="nav-link" href="#team"><span>◎</span> Команда</a>
-      </nav>
       <div class="sidebar-bottom">
-        <button class="settings-btn" id="openSettings"><span>⚙</span> Интеграция</button>
+        <button class="settings-btn" id="openSettings"><span>⚙</span>Подключить Instagram</button>
         <div class="user-card"><div class="avatar orange" id="avatar">АР</div><div><b id="userName">Алина Романова</b><small id="userHandle">@alina.creates</small></div><button id="logout" aria-label="Выйти">↗</button></div>
       </div>
     </aside>
@@ -41,7 +35,7 @@
       <header class="topbar">
         <div class="mobile-brand">pif paf</div>
         <div class="period"><button data-offset="-1" aria-label="Предыдущий месяц">‹</button><span id="periodText">—</span><button data-offset="1" aria-label="Следующий месяц">›</button></div>
-        <div class="top-actions"><button class="icon-btn" aria-label="Уведомления">♧<i></i></button><button class="add-btn" id="openAdd">+ Добавить рилс</button></div>
+        <div class="top-actions"><button class="icon-btn" aria-label="Уведомления">♧<i></i></button><button class="add-btn" id="openAdd">+ <span>Добавить рилс</span></button></div>
       </header>
       <section id="overview" class="content">
         <div class="welcome-row"><div><p class="eyebrow" id="greeting">ДОБРОЕ УТРО ✦</p><h1>Ваше творчество<br><em>в цифрах.</em></h1></div><p class="freshness"><span></span> <span id="freshnessText">Загружаем данные…</span></p></div>
@@ -51,7 +45,7 @@
           <article class="stat-card mint"><p>ЛАЙКИ</p><strong id="likesTotal">—</strong><small>по всем рилсам</small><div class="sparkline green-line">▃▅▂▆▄▃▇▅</div></article>
           <article class="stat-card yellow"><p>РИЛСОВ В БАЗЕ</p><strong id="reelsTotal">—</strong><small>синхронизация сервером</small><div class="rating-dots">● ● ● ● ◐</div></article>
         </section>
-        <section class="section-heading"><div><p class="eyebrow">ВАШ КОНТЕНТ</p><h2>Последние рилсы</h2></div><div class="switcher"><button class="selected" data-view="grid">▦</button><button data-view="list">☷</button></div></section>
+        <section class="section-heading"><div><p class="eyebrow">ВАШ КОНТЕНТ</p><h2>Последние рилсы</h2></div><div class="switcher" aria-label="Вид списка"><button class="selected" data-view="grid" aria-label="Плитка">▦</button><button data-view="list" aria-label="Список">☷</button></div></section>
         <section class="reels-grid" id="reels"></section>
         <button class="show-more" id="showMore" hidden>Показать все рилсы <span>→</span></button>
         <section id="analytics" class="analytics-panel"><div><p class="eyebrow">АНАЛИТИКА</p><h2>Ритм просмотров</h2><p class="muted">Лучший день недели — четверг. Аудитория особенно активно смотрит видео в 19:00–21:00.</p></div><div class="chart" aria-label="График просмотров"><div class="bars"><i style="height:28%"></i><i style="height:42%"></i><i style="height:34%"></i><i style="height:63%"></i><i style="height:51%"></i><i style="height:88%"></i><i style="height:72%"></i></div><div class="chart-labels"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div></div></section>
