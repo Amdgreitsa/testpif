@@ -7,6 +7,7 @@ command -v apt-get >/dev/null || { echo "Поддерживаются тольк
 APP_DIR="/opt/pifpaf-creators"
 ENV_FILE="$APP_DIR/.env"
 UPDATE_ONLY=0
+APT_LOCK_TIMEOUT=600
 if [[ "${1:-}" == "--update" ]]; then UPDATE_ONLY=1; fi
 
 get_env() {
@@ -74,6 +75,20 @@ wait_for_health() {
   return 1
 }
 
+wait_for_package_manager() {
+  local elapsed=0
+  command -v fuser >/dev/null || { echo "Утилита fuser недоступна; apt будет самостоятельно ждать блокировку dpkg до ${APT_LOCK_TIMEOUT} секунд."; return 0; }
+  while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+    if (( elapsed >= APT_LOCK_TIMEOUT )); then
+      echo "Менеджер пакетов занят более ${APT_LOCK_TIMEOUT} секунд. Дождитесь завершения unattended-upgrades и повторите запуск."
+      return 1
+    fi
+    echo "Ожидаем освобождения dpkg (unattended-upgrades)… ${elapsed}/${APT_LOCK_TIMEOUT} с"
+    sleep 5
+    ((elapsed += 5))
+  done
+}
+
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ -f "$SOURCE_DIR/server.js" && -f "$SOURCE_DIR/index.html" ]] || { echo "Запускайте скрипт из папки проекта PifPaf Creators."; exit 1; }
 
@@ -123,8 +138,9 @@ fi
 # The service runs as www-data. Do not run it directly from /root: www-data cannot
 # traverse that directory even when files inside it are chowned correctly.
 echo "Устанавливаем/обновляем Node.js, npm, Nginx и Certbot…"
-apt-get update
-apt-get install -y curl nginx certbot python3-certbot-nginx nodejs npm
+wait_for_package_manager
+apt-get -o "DPkg::Lock::Timeout=$APT_LOCK_TIMEOUT" update
+apt-get -o "DPkg::Lock::Timeout=$APT_LOCK_TIMEOUT" install -y curl nginx certbot python3-certbot-nginx nodejs npm
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 [[ "$NODE_MAJOR" -ge 18 ]] || { echo "Требуется Node.js 18 или новее, найден: $(node --version)"; exit 1; }
 command -v npm >/dev/null || { echo "npm не установлен. Установите пакет npm и повторите запуск install.sh."; exit 1; }
