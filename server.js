@@ -16,6 +16,7 @@ const dbFile = path.join(dataDir, 'db.json');
 const PORT = Number(process.env.PORT || 3000);
 const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
 const APIFY_ACTOR = process.env.APIFY_ACTOR || 'apify/instagram-scraper';
+const MAX_IMPORT_REELS = 500;
 const TELEGRAM_BOT_USERNAME = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SESSION_TTL = 1000 * 60 * 60 * 24 * 14;
@@ -99,16 +100,25 @@ function analytics(db, user) {
   };
 }
 function apifyEndpoint() { return `https://api.apify.com/v2/acts/${encodeURIComponent(APIFY_ACTOR)}/run-sync-get-dataset-items?token=${encodeURIComponent(APIFY_TOKEN)}`; }
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 async function runApify(input) {
   if (!APIFY_TOKEN) throw new Error('APIFY_TOKEN не настроен на сервере');
-  const response = await fetch(apifyEndpoint(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
-  if (!response.ok) throw new Error(`Apify вернул ${response.status}`);
-  return response.json();
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(apifyEndpoint(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+      if (response.ok) { const items = await response.json(); if (!Array.isArray(items)) throw new Error('Apify вернул неожиданный формат данных'); return items; }
+      lastError = new Error(`Apify вернул ${response.status}`);
+      if (response.status < 500 && response.status !== 429) throw lastError;
+    } catch (error) { lastError = error; }
+    if (attempt < 2) await delay(600 * (attempt + 1));
+  }
+  throw lastError || new Error('Не удалось получить данные из Apify');
 }
 async function fetchInstagram(url) { const [item] = await runApify({ directUrls: [url], resultsType: 'posts', resultsLimit: 1 }); if (!item) throw new Error('Apify не вернул данные по этой ссылке'); return item; }
 function profileUrl(handle) { const clean = String(handle || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0]; if (!/^[a-z0-9._]{1,30}$/i.test(clean)) throw new Error('Укажите корректный Instagram handle'); return { handle: `@${clean}`, url: `https://www.instagram.com/${clean}/` }; }
 async function fetchProfileReels(handle, limit) {
-  const profile = profileUrl(handle); const requested = Math.min(Math.max(Number(limit) || 50, 1), 50); const items = await runApify({ directUrls: [profile.url], resultsType: 'posts', resultsLimit: requested, onlyPostsNewerThan: '10 years' }); const reels = items.filter(item => item.type === 'Video' || item.productType === 'clips' || /\/reel\//.test(item.url || item.shortCode || ''));
+  const profile = profileUrl(handle); const requested = Math.min(Math.max(Number(limit) || MAX_IMPORT_REELS, 1), MAX_IMPORT_REELS); const items = await runApify({ directUrls: [profile.url], resultsType: 'posts', resultsLimit: requested, onlyPostsNewerThan: '10 years' }); const reels = items.filter(item => item.type === 'Video' || item.productType === 'clips' || item.videoUrl || /\/reel\//.test(item.url || item.shortCode || ''));
   return { ...profile, items: reels, requested, received: items.length, skipped: items.length - reels.length };
 }
 function normalize(item, url) { const sourceUrl = item.url || (item.shortCode ? `https://www.instagram.com/reel/${item.shortCode}/` : url); return { sourceUrl, title: (item.caption || 'Новый рилс').replace(/\s+/g, ' ').slice(0, 90), publishedAt: item.timestamp || new Date().toISOString(), views: Number(item.videoViewCount || item.videoPlayCount || 0), likes: Number(item.likesCount || 0), comments: Number(item.commentsCount || 0), duration: Number(item.videoDuration || 0), coverUrl: item.displayUrl || item.thumbnailUrl || null }; }

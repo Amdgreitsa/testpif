@@ -20,3 +20,8 @@ button{min-height:40px;touch-action:manipulation}.sidebar{position:sticky;top:0;
 [hidden]{display:none !important}
 .analytics-legend{display:flex;align-items:center;gap:10px;margin-top:22px;font:500 10px 'DM Mono';color:var(--muted)}.analytics-legend strong{color:var(--ink);margin-left:auto}.legend-dot{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;background:var(--orange)}.bars i{min-width:8px;transition:height .45s ease,background .2s ease}.bars i:hover{background:#d95c43;filter:brightness(.98)}
 @media(max-width:560px){.analytics-legend{margin-top:18px}.chart{height:115px}.bars{gap:8px}}
+
+/* Notification centre is an edge-to-edge page, not a rounded modal. */
+.notifications-dialog{width:min(560px,100vw);height:100vh;max-height:100vh;margin:0 0 0 auto;border-radius:0;box-shadow:-20px 0 55px #32271d26}.notifications-dialog>section{height:100%;overflow:auto;padding:42px}.notifications-dialog .close{right:24px;top:18px}.notifications-dialog .notification,.notifications-dialog .notifications-empty{border-radius:0}.notifications-dialog .notification{border-left:3px solid var(--orange)}
+@media(max-width:560px){.topbar .icon-btn,#openNotifications{display:grid;place-items:center;min-width:42px;min-height:42px;font-size:21px}.top-actions{gap:5px}.notifications-dialog{width:100vw}.notifications-dialog>section{padding:34px 22px}.notifications-dialog .close{right:14px;top:12px}}
+@media(max-width:560px){.notifications-dialog{position:fixed;inset:0;width:100vw !important;max-width:none;height:100dvh;max-height:none;margin:0;border:0}}
